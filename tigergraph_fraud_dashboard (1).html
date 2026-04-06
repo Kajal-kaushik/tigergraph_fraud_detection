@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TigerGraph Savanna — Fraud Detection</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --tg-bg:#0a0c10;--tg-s1:#111520;--tg-s2:#161b27;
+  --tg-border:rgba(245,166,35,0.15);--tg-border2:rgba(255,255,255,0.06);
+  --amber:#f5a623;--red:#e84040;--green:#22d37a;--blue:#3b9eff;--purple:#a78bfa;
+  --text:#e2e8f0;--text2:#8896a9;--muted:#4a5568;
+  --mono:'Space Mono',monospace;--disp:'Syne',sans-serif;
+}
+body{background:var(--tg-bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden}
+
+/* ─── CONNECT SCREEN ─────── */
+#connectScreen{position:fixed;inset:0;background:var(--tg-bg);z-index:100;
+  display:flex;align-items:center;justify-content:center;padding:24px;}
+.connect-card{background:var(--tg-s1);border:1px solid var(--tg-border);border-radius:14px;
+  padding:40px 44px;max-width:540px;width:100%;}
+.connect-logo{display:flex;align-items:center;gap:12px;margin-bottom:28px;}
+.connect-logo svg{width:36px;height:36px;}
+.connect-title{font-family:var(--disp);font-weight:800;font-size:20px;}
+.connect-title span{color:var(--amber);}
+.connect-sub{font-size:10px;color:var(--text2);letter-spacing:0.1em;text-transform:uppercase;margin-top:3px;}
+.connect-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;display:block;}
+.connect-input{width:100%;background:rgba(0,0,0,0.4);border:1px solid var(--tg-border2);
+  border-radius:6px;padding:10px 14px;color:var(--text);font-family:var(--mono);
+  font-size:12px;margin-bottom:16px;outline:none;transition:border 0.2s;}
+.connect-input:focus{border-color:var(--amber);}
+.connect-input::placeholder{color:var(--muted);}
+.connect-btn{width:100%;background:var(--amber);color:#000;border:none;border-radius:6px;
+  padding:12px;font-family:var(--mono);font-weight:700;font-size:13px;cursor:pointer;
+  letter-spacing:0.05em;transition:opacity 0.2s;}
+.connect-btn:hover{opacity:0.88;}
+.connect-btn:disabled{opacity:0.4;cursor:not-allowed;}
+.demo-btn{width:100%;background:transparent;border:1px solid var(--tg-border2);color:var(--text2);
+  border-radius:6px;padding:10px;font-family:var(--mono);font-size:11px;cursor:pointer;
+  margin-top:10px;transition:border-color 0.2s;}
+.demo-btn:hover{border-color:var(--text2);}
+.connect-err{color:var(--red);font-size:10px;margin-bottom:12px;display:none;}
+.connect-steps{margin-top:28px;padding-top:24px;border-top:1px solid var(--tg-border2);}
+.step{display:flex;gap:12px;margin-bottom:12px;font-size:11px;color:var(--text2);line-height:1.5;}
+.step-num{color:var(--amber);font-weight:700;flex-shrink:0;}
+.step a{color:var(--blue);text-decoration:none;}
+.step a:hover{text-decoration:underline;}
+
+/* ─── MAIN DASHBOARD ─────── */
+#dashboard{display:none;}
+.header{background:var(--tg-s2);border-bottom:1px solid var(--tg-border);
+  padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
+.logo-wrap{display:flex;align-items:center;gap:10px;}
+.logo-text{font-family:var(--disp);font-weight:800;font-size:15px;}
+.logo-text span{color:var(--amber);}
+.logo-sub{font-size:9px;color:var(--text2);letter-spacing:0.1em;text-transform:uppercase;margin-top:1px;}
+.hbar{display:flex;align-items:center;gap:16px;font-size:10px;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pdot 2s ease-in-out infinite;}
+@keyframes pdot{0%,100%{opacity:1}50%{opacity:.3}}
+.hval{color:var(--green);font-weight:700;}
+.hlabel{color:var(--text2);}
+.hdivider{color:var(--muted);}
+.disco-btn{background:transparent;border:1px solid var(--muted);color:var(--text2);
+  padding:4px 10px;border-radius:4px;font-family:var(--mono);font-size:10px;cursor:pointer;transition:border-color 0.2s;}
+.disco-btn:hover{border-color:var(--red);color:var(--red);}
+
+/* ─── LAYOUT ─────────────── */
+.grid-main{display:grid;grid-template-columns:1fr 340px;height:calc(100vh - 52px);}
+.left-col{border-right:1px solid var(--tg-border);display:flex;flex-direction:column;overflow:hidden;}
+.right-col{display:flex;flex-direction:column;overflow-y:auto;}
+
+/* panels */
+.panel-header{padding:10px 16px;border-bottom:1px solid var(--tg-border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+  background:rgba(245,166,35,0.02);}
+.ptitle{font-family:var(--disp);font-size:11px;font-weight:700;letter-spacing:0.08em;
+  text-transform:uppercase;color:var(--amber);}
+.badge-live{font-size:9px;padding:2px 7px;border-radius:3px;
+  background:rgba(232,64,64,0.15);color:var(--red);border:1px solid rgba(232,64,64,0.3);
+  animation:blink 1.5s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* graph */
+#graphCanvas{flex:1;display:block;width:100%;background:var(--tg-bg);}
+
+/* metrics */
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--tg-border);flex-shrink:0;}
+.metric{padding:14px 16px;border-right:1px solid var(--tg-border);}
+.metric:last-child{border-right:none;}
+.mlabel{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;}
+.mval{font-family:var(--disp);font-size:22px;font-weight:800;}
+.msub{font-size:9px;margin-top:3px;}
+.c-red{color:var(--red)}.c-amb{color:var(--amber)}.c-grn{color:var(--green)}.c-blu{color:var(--blue)}
+
+/* feed */
+.feed-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+.feed-list{overflow-y:auto;flex:1;}
+.feed-list::-webkit-scrollbar{width:3px;}
+.feed-list::-webkit-scrollbar-thumb{background:var(--tg-border);border-radius:2px;}
+.tx-row{display:flex;align-items:center;gap:8px;padding:7px 14px;
+  border-bottom:1px solid rgba(255,255,255,0.03);font-size:10px;cursor:pointer;transition:background 0.2s;}
+.tx-row:hover{background:rgba(245,166,35,0.04);}
+.tx-row.new{animation:appear 0.35s ease-out;}
+@keyframes appear{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.risk-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.r-high{background:var(--red);box-shadow:0 0 5px var(--red);}
+.r-med{background:var(--amber);}
+.r-low{background:var(--green);}
+.tx-id{color:var(--blue);width:72px;font-size:9px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;}
+.tx-info{flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tx-amt{width:70px;text-align:right;flex-shrink:0;font-weight:700;}
+.tx-score{width:28px;text-align:right;flex-shrink:0;font-size:9px;font-weight:700;}
+
+/* alerts / patterns */
+.alerts-wrap,.patterns-wrap{border-bottom:1px solid var(--tg-border);}
+.alert-item{padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.03);
+  display:flex;gap:10px;font-size:10px;cursor:pointer;}
+.alert-item:hover{background:rgba(255,255,255,0.02);}
+.ai-icon{flex-shrink:0;margin-top:1px;font-size:13px;}
+.ai-body{flex:1;}
+.ai-title{font-weight:700;margin-bottom:2px;}
+.ai-desc{color:var(--text2);line-height:1.4;}
+.ai-time{color:var(--muted);font-size:9px;margin-top:3px;}
+.pat-item{display:flex;align-items:center;gap:8px;padding:7px 14px;
+  font-size:10px;border-bottom:1px solid rgba(255,255,255,0.03);}
+.pat-name{color:var(--text2);width:120px;flex-shrink:0;line-height:1.3;}
+.bar-bg{flex:1;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:2px;transition:width 1s ease-out;}
+.pat-num{width:26px;text-align:right;flex-shrink:0;font-weight:700;color:var(--text);}
+
+/* gsql */
+.gsql-wrap{border-top:1px solid var(--tg-border);flex-shrink:0;}
+.gsql-header{padding:10px 16px;border-bottom:1px solid var(--tg-border);
+  display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  background:rgba(0,0,0,0.2);}
+.gsql-header:hover{background:rgba(245,166,35,0.04);}
+.gsql-body{display:none;padding:12px 16px;}
+.gsql-code{font-family:var(--mono);font-size:10px;line-height:1.8;color:var(--text2);
+  white-space:pre;overflow-x:auto;max-height:200px;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a}
+
+/* loading overlay */
+.loading{position:fixed;inset:0;background:rgba(10,12,16,0.92);z-index:50;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+.loading-spinner{width:40px;height:40px;border:2px solid rgba(245,166,35,0.2);
+  border-top-color:var(--amber);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{color:var(--text2);font-size:12px;letter-spacing:0.08em;}
+
+/* node details popup */
+.node-popup{position:absolute;background:var(--tg-s1);border:1px solid var(--tg-border);
+  border-radius:8px;padding:12px 16px;font-size:10px;pointer-events:none;
+  display:none;z-index:20;max-width:220px;}
+.np-title{font-weight:700;color:var(--amber);margin-bottom:8px;font-size:11px;}
+.np-row{display:flex;justify-content:space-between;gap:16px;margin-bottom:4px;}
+.np-key{color:var(--text2);}
+.np-val{color:var(--text);font-weight:700;}
+</style>
+</head>
+<body>
+
+<!-- CONNECT SCREEN -->
+<div id="connectScreen">
+  <div class="connect-card">
+    <div class="connect-logo">
+      <svg viewBox="0 0 36 36" fill="none">
+        <circle cx="18" cy="18" r="17" stroke="#f5a623" stroke-width="1.5" opacity="0.3"/>
+        <circle cx="18" cy="9"  r="4" fill="#f5a623"/>
+        <circle cx="9"  cy="24" r="4" fill="#f5a623" opacity="0.7"/>
+        <circle cx="27" cy="24" r="4" fill="#f5a623" opacity="0.7"/>
+        <circle cx="18" cy="18" r="3" fill="#3b9eff"/>
+        <line x1="18" y1="13" x2="18" y2="15" stroke="#f5a623" stroke-width="1.5"/>
+        <line x1="12" y1="22" x2="15" y2="20" stroke="#f5a623" stroke-width="1.5" opacity="0.7"/>
+        <line x1="24" y1="22" x2="21" y2="20" stroke="#f5a623" stroke-width="1.5" opacity="0.7"/>
+      </svg>
+      <div>
+        <div class="connect-title">Tiger<span>Graph</span> Savanna</div>
+        <div class="connect-sub">Fraud Detection Platform</div>
+      </div>
+    </div>
+
+    <div id="connectErr" class="connect-err"></div>
+
+    <label class="connect-label">Savanna Host URL</label>
+    <input class="connect-input" id="hostInput" type="text"
+      placeholder="https://your-subdomain.i.tgcloud.io" autocomplete="off"/>
+
+    <label class="connect-label">API Token</label>
+    <input class="connect-input" id="tokenInput" type="password"
+      placeholder="Paste your REST++ bearer token" autocomplete="off"/>
+
+    <label class="connect-label">Graph Name</label>
+    <input class="connect-input" id="graphInput" type="text"
+      value="FraudGraph" autocomplete="off"/>
+
+    <button class="connect-btn" id="connectBtn" onclick="doConnect()">
+      ▶ CONNECT TO SAVANNA
+    </button>
+    <button class="demo-btn" onclick="runDemo()">
+      Run in Demo Mode (simulated data)
+    </button>
+
+    <div class="connect-steps">
+      <div class="step"><span class="step-num">1.</span>
+        <span>Create free account at <a href="https://savanna.tgcloud.io" target="_blank">savanna.tgcloud.io</a> → New Solution → Blank Graph named <strong>FraudGraph</strong></span></div>
+      <div class="step"><span class="step-num">2.</span>
+        <span>Open GraphStudio → GSQL Editor → paste & run <strong>01_schema.gsql</strong>, then <strong>02_queries.gsql</strong>, then <strong>03_sample_data.gsql</strong> (included in download)</span></div>
+      <div class="step"><span class="step-num">3.</span>
+        <span>Admin panel → Users → Generate Secret → run:<br>
+        <code style="color:var(--blue);font-size:9px">POST /restpp/requesttoken {"secret":"..."}</code><br>to get your bearer token</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div class="loading" id="loadingScreen" style="display:none">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loadingText">Connecting to TigerGraph Savanna...</div>
+</div>
+
+<!-- MAIN DASHBOARD -->
+<div id="dashboard">
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo-wrap">
+      <svg width="26" height="26" viewBox="0 0 36 36" fill="none">
+        <circle cx="18" cy="18" r="17" stroke="#f5a623" stroke-width="1.5" opacity="0.3"/>
+        <circle cx="18" cy="9"  r="4" fill="#f5a623"/>
+        <circle cx="9"  cy="24" r="4" fill="#f5a623" opacity="0.7"/>
+        <circle cx="27" cy="24" r="4" fill="#f5a623" opacity="0.7"/>
+        <circle cx="18" cy="18" r="3" fill="#3b9eff"/>
+      </svg>
+      <div>
+        <div class="logo-text">Tiger<span>Graph</span> Savanna</div>
+        <div class="logo-sub">Fraud Detection — <span id="graphNameLabel">FraudGraph</span></div>
+      </div>
+    </div>
+    <div class="hbar">
+      <div class="dot"></div>
+      <span class="hlabel">Engine</span><span class="hval">CONNECTED</span>
+      <span class="hdivider">|</span>
+      <span class="hlabel">Vertices:</span><span class="hval" id="hVertices">—</span>
+      <span class="hdivider">|</span>
+      <span class="hlabel">Edges:</span><span class="hval" id="hEdges">—</span>
+      <span class="hdivider">|</span>
+      <span class="hval" id="hClock">—</span>
+      <button class="disco-btn" onclick="disconnect()">✕ Disconnect</button>
+    </div>
+  </div>
+
+  <!-- GRID -->
+  <div class="grid-main">
+    <!-- LEFT -->
+    <div class="left-col">
+      <!-- graph header -->
+      <div class="panel-header">
+        <div class="ptitle">▸ Transaction Network Graph</div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <select id="seedSelect" style="background:#0a0c10;border:1px solid rgba(255,255,255,0.1);
+            color:var(--text2);font-family:var(--mono);font-size:10px;padding:3px 6px;border-radius:4px;"
+            onchange="loadGraph()">
+            <option value="">— select account —</option>
+          </select>
+          <span class="badge-live">● LIVE</span>
+        </div>
+      </div>
+      <div style="position:relative;flex:1;display:flex;flex-direction:column;">
+        <canvas id="graphCanvas"></canvas>
+        <div class="node-popup" id="nodePopup"></div>
+      </div>
+
+      <!-- GSQL -->
+      <div class="gsql-wrap">
+        <div class="gsql-header" onclick="toggleGsql()">
+          <div class="ptitle">▸ Last GSQL Query Executed</div>
+          <span id="gsqlToggle" style="font-size:9px;color:var(--text2);">▼ expand</span>
+        </div>
+        <div id="gsqlBody" class="gsql-body">
+          <div class="gsql-code" id="gsqlCode">-- waiting for query...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right-col">
+      <!-- metrics -->
+      <div class="metrics-grid">
+        <div class="metric">
+          <div class="mlabel">Flagged Accounts</div>
+          <div class="mval c-red" id="mFlagged">—</div>
+          <div class="msub c-red">high risk detected</div>
+        </div>
+        <div class="metric">
+          <div class="mlabel">Avg Risk Score</div>
+          <div class="mval c-amb" id="mAvgRisk">—</div>
+          <div class="msub" style="color:var(--text2)">graph-traversal scored</div>
+        </div>
+      </div>
+      <div class="metrics-grid" style="border-top:none;">
+        <div class="metric">
+          <div class="mlabel">Total Accounts</div>
+          <div class="mval c-grn" id="mTotal">—</div>
+          <div class="msub" style="color:var(--text2)">in FraudGraph</div>
+        </div>
+        <div class="metric">
+          <div class="mlabel">High Risk (>0.7)</div>
+          <div class="mval c-blu" id="mHighRisk">—</div>
+          <div class="msub" style="color:var(--text2)">requiring review</div>
+        </div>
+      </div>
+
+      <!-- feed header -->
+      <div class="panel-header">
+        <div class="ptitle">▸ High-Risk Accounts</div>
+        <span style="font-size:9px;color:var(--text2)">from Savanna</span>
+      </div>
+      <div class="feed-wrap">
+        <div class="feed-list" id="accountFeed">
+          <div style="padding:20px;text-align:center;color:var(--muted);font-size:10px;">Loading accounts...</div>
+        </div>
+      </div>
+
+      <!-- alerts -->
+      <div class="alerts-wrap">
+        <div class="panel-header">
+          <div class="ptitle">▸ Ring Detection Results</div>
+          <span class="badge-live" id="ringBadge" style="display:none">RING FOUND</span>
+        </div>
+        <div id="ringResults" style="padding:12px 14px;font-size:10px;color:var(--text2);">
+          Select an account above to run ring detection...
+        </div>
+      </div>
+
+      <!-- patterns -->
+      <div class="patterns-wrap">
+        <div class="panel-header">
+          <div class="ptitle">▸ Fraud Type Distribution</div>
+        </div>
+        <div id="patternList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ─────────────────────────────────────────────────────────────────
+let HOST = '', TOKEN = '', GRAPH = 'FraudGraph';
+let isDemo = false;
+let graphNodes = [], graphLinks = [], animFrame;
+let tick = 0, canvasW, canvasH;
+
+// ─── CLOCK ─────────────────────────────────────────────────────────────────
+function updateClock() {
+  const el = document.getElementById('hClock');
+  if (el) el.textContent = new Date().toLocaleTimeString('en-US',{hour12:false});
+}
+setInterval(updateClock, 1000);
+
+// ─── API ────────────────────────────────────────────────────────────────────
+async function tgGet(path) {
+  const url = HOST.replace(/\/$/, '') + path;
+  const res = await fetch(url, {
+    headers: TOKEN ? { 'Authorization': 'Bearer ' + TOKEN } : {}
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+async function runQuery(queryName, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  const path = `/restpp/query/${GRAPH}/${queryName}${qs ? '?' + qs : ''}`;
+  return tgGet(path);
+}
+
+// ─── CONNECT ────────────────────────────────────────────────────────────────
+async function doConnect() {
+  HOST  = document.getElementById('hostInput').value.trim();
+  TOKEN = document.getElementById('tokenInput').value.trim();
+  GRAPH = document.getElementById('graphInput').value.trim() || 'FraudGraph';
+
+  if (!HOST) { showErr('Please enter your Savanna host URL.'); return; }
+  if (!TOKEN) { showErr('Please enter your API token.'); return; }
+
+  setLoading('Connecting to TigerGraph Savanna...');
+  try {
+    // Verify connection by fetching vertex count
+    const data = await tgGet(`/restpp/graph/${GRAPH}/vertices/Account?limit=1`);
+    if (data.error) throw new Error(data.message || 'Connection failed');
+    hideLoading();
+    launchDashboard();
+  } catch(e) {
+    hideLoading();
+    showErr('Connection failed: ' + e.message + '. Check your host URL, token, and that the graph exists.');
+  }
+}
+
+function showErr(msg) {
+  const el = document.getElementById('connectErr');
+  el.textContent = msg; el.style.display = 'block';
+}
+function setLoading(msg) {
+  document.getElementById('loadingText').textContent = msg;
+  document.getElementById('loadingScreen').style.display = 'flex';
+  document.getElementById('connectScreen').style.display = 'none';
+}
+function hideLoading() {
+  document.getElementById('loadingScreen').style.display = 'none';
+}
+
+// ─── DEMO MODE ──────────────────────────────────────────────────────────────
+function runDemo() {
+  isDemo = true;
+  HOST = 'DEMO'; TOKEN = 'DEMO'; GRAPH = 'FraudGraph';
+  document.getElementById('connectScreen').style.display = 'none';
+  launchDashboard();
+}
+
+function disconnect() {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  isDemo = false; HOST = ''; TOKEN = ''; GRAPH = 'FraudGraph';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('connectScreen').style.display = 'flex';
+  document.getElementById('connectErr').style.display = 'none';
+}
+
+// ─── LAUNCH ─────────────────────────────────────────────────────────────────
+async function launchDashboard() {
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('graphNameLabel').textContent = GRAPH;
+  updateClock();
+
+  if (isDemo) {
+    loadDemoData();
+  } else {
+    await loadLiveData();
+  }
+  initCanvas();
+  startLiveFeed();
+}
+
+// ─── LIVE DATA ───────────────────────────────────────────────────────────────
+async function loadLiveData() {
+  try {
+    setLoadingOverlay('Fetching fraud summary...');
+    const summary = await runQuery('getFraudSummary');
+    const r = summary.results?.[0] || {};
+    document.getElementById('mTotal').textContent   = (r.totalAccounts || 0).toLocaleString();
+    document.getElementById('mFlagged').textContent = (r.flaggedAccounts || 0).toLocaleString();
+    document.getElementById('mHighRisk').textContent= (r.highRiskAccounts || 0).toLocaleString();
+    document.getElementById('mAvgRisk').textContent = ((r.avgRiskScore||0)*100).toFixed(1)+'%';
+
+    setLoadingOverlay('Fetching graph statistics...');
+    try {
+      const vc = await tgGet(`/restpp/graph/${GRAPH}/vertices/Account?limit=0`);
+      document.getElementById('hVertices').textContent = (vc.count || '?').toLocaleString();
+    } catch(e) { document.getElementById('hVertices').textContent = 'N/A'; }
+
+    setLoadingOverlay('Loading high-risk accounts...');
+    const accounts = await runQuery('getHighRiskAccounts', {minRisk: 0.5, topK: 20});
+    renderAccountFeed(accounts.results || []);
+    populateSeedSelect(accounts.results || []);
+    updateGsql('getHighRiskAccounts', {minRisk:0.5, topK:20});
+
+    buildDemoGraph(); // Build visual graph from account data
+    hideLoadingOverlay();
+  } catch(e) {
+    hideLoadingOverlay();
+    console.error(e);
+  }
+}
+
+let loadingOverlayEl = null;
+function setLoadingOverlay(msg) {
+  if (!loadingOverlayEl) {
+    loadingOverlayEl = document.createElement('div');
+    loadingOverlayEl.style.cssText = 'position:fixed;bottom:16px;right:16px;background:var(--tg-s1);border:1px solid var(--tg-border);border-radius:6px;padding:10px 14px;font-size:10px;color:var(--text2);z-index:50;';
+    document.body.appendChild(loadingOverlayEl);
+  }
+  loadingOverlayEl.textContent = '⟳ ' + msg;
+}
+function hideLoadingOverlay() {
+  if (loadingOverlayEl) { loadingOverlayEl.remove(); loadingOverlayEl = null; }
+}
+
+// ─── DEMO DATA ────────────────────────────────────────────────────────────────
+function loadDemoData() {
+  document.getElementById('mFlagged').textContent   = '5';
+  document.getElementById('mAvgRisk').textContent   = '52.4%';
+  document.getElementById('mTotal').textContent     = '10';
+  document.getElementById('mHighRisk').textContent  = '5';
+  document.getElementById('hVertices').textContent  = '10';
+  document.getElementById('hEdges').textContent     = '22';
+
+  const demoAccounts = [
+    {acct_id:'AC007',name:'Ghost Acct1', risk_score:0.97, tx_count:2100, is_flagged:true},
+    {acct_id:'AC005',name:'Eve Okafor',  risk_score:0.94, tx_count:1890, is_flagged:true},
+    {acct_id:'AC008',name:'Ghost Acct2', risk_score:0.96, tx_count:1980, is_flagged:true},
+    {acct_id:'AC002',name:'Bob Malikov', risk_score:0.88, tx_count:1240, is_flagged:true},
+    {acct_id:'AC009',name:'Ghost Acct3', risk_score:0.95, tx_count:1760, is_flagged:true},
+    {acct_id:'AC003',name:'Carlos Lima', risk_score:0.71, tx_count:880,  is_flagged:true},
+    {acct_id:'AC001',name:'Alice Chen',  risk_score:0.12, tx_count:340,  is_flagged:false},
+    {acct_id:'AC004',name:'Diana Park',  risk_score:0.15, tx_count:210,  is_flagged:false},
+    {acct_id:'AC006',name:'Frank Weiss', risk_score:0.09, tx_count:540,  is_flagged:false},
+    {acct_id:'AC010',name:'Hannah Kim',  risk_score:0.06, tx_count:890,  is_flagged:false},
+  ];
+  renderAccountFeed(demoAccounts);
+  populateSeedSelect(demoAccounts);
+  buildDemoGraph(demoAccounts);
+  renderDemoPatterns();
+  updateGsql('getHighRiskAccounts', {minRisk:0.6, topK:50});
+}
+
+function renderDemoPatterns() {
+  const patterns = [
+    {name:'Money Mule Ring',   count:5,  pct:100, color:'#e84040'},
+    {name:'Synthetic ID',      count:3,  pct:60,  color:'#f5a623'},
+    {name:'Card Testing',      count:3,  pct:60,  color:'#f5a623'},
+    {name:'Impossible Travel', count:2,  pct:40,  color:'#a78bfa'},
+    {name:'Account Takeover',  count:1,  pct:20,  color:'#3b9eff'},
+  ];
+  const el = document.getElementById('patternList');
+  el.innerHTML = '';
+  patterns.forEach(p => {
+    const d = document.createElement('div');
+    d.className = 'pat-item';
+    d.innerHTML = `<div class="pat-name">${p.name}</div>
+      <div class="bar-bg"><div class="bar-fill" style="width:0%;background:${p.color}" data-w="${p.pct}"></div></div>
+      <div class="pat-num">${p.count}</div>`;
+    el.appendChild(d);
+  });
+  setTimeout(() => el.querySelectorAll('.bar-fill').forEach(b => b.style.width = b.dataset.w + '%'), 200);
+}
+
+// ─── RENDER ACCOUNTS ────────────────────────────────────────────────────────
+function renderAccountFeed(accounts) {
+  const list = document.getElementById('accountFeed');
+  list.innerHTML = '';
+  if (!accounts.length) {
+    list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:10px;">No high-risk accounts found.</div>';
+    return;
+  }
+  accounts.forEach(a => {
+    const score = a.risk_score || 0;
+    const pct = (score * 100).toFixed(0);
+    const riskCls = score > 0.75 ? 'r-high' : score > 0.5 ? 'r-med' : 'r-low';
+    const col = score > 0.75 ? 'var(--red)' : score > 0.5 ? 'var(--amber)' : 'var(--green)';
+    const row = document.createElement('div');
+    row.className = 'tx-row';
+    row.onclick = () => { document.getElementById('seedSelect').value = a.acct_id; loadGraph(); };
+    row.innerHTML = `<div class="risk-dot ${riskCls}"></div>
+      <div class="tx-id">${a.acct_id}</div>
+      <div class="tx-info">${a.name || '—'} · ${a.tx_count || 0} tx</div>
+      <div class="tx-amt">${a.is_flagged ? '<span style="color:var(--red)">⚑ FLAGGED</span>' : ''}</div>
+      <div class="tx-score" style="color:${col}">${pct}</div>`;
+    list.appendChild(row);
+  });
+}
+
+function populateSeedSelect(accounts) {
+  const sel = document.getElementById('seedSelect');
+  accounts.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.acct_id;
+    opt.textContent = `${a.acct_id} — ${a.name || '?'} (${((a.risk_score||0)*100).toFixed(0)}%)`;
+    sel.appendChild(opt);
+  });
+}
+
+// ─── RING DETECTION ──────────────────────────────────────────────────────────
+async function loadGraph() {
+  const seed = document.getElementById('seedSelect').value;
+  if (!seed) return;
+
+  if (isDemo) { runDemoRingDetect(seed); return; }
+
+  setLoadingOverlay('Running ring detection on ' + seed + '...');
+  try {
+    const res = await runQuery('detectFraudRing', {seed, depth:3, threshold:0.6});
+    hideLoadingOverlay();
+    updateGsql('detectFraudRing', {seed, depth:3, threshold:0.6});
+    renderRingResults(res.results || []);
+  } catch(e) {
+    hideLoadingOverlay();
+    renderRingResults([], e.message);
+  }
+
+  try {
+    const netRes = await runQuery('getTransactionNetwork', {acct: seed, hops: 2});
+    buildLiveGraph(netRes.results || [], seed);
+  } catch(e) { /* keep demo graph */ }
+}
+
+function runDemoRingDetect(seed) {
+  const rings = {
+    'AC002': ['AC002','AC003','AC005','AC007','AC008','AC009'],
+    'AC007': ['AC007','AC008','AC009','AC002','AC003'],
+    'AC005': ['AC005','AC007','AC008','AC009'],
+  };
+  const members = rings[seed] || [];
+  renderRingResults(members.map(id => ({acct_id:id, risk_score: 0.7+Math.random()*0.3})));
+  updateGsql('detectFraudRing', {seed, depth:3, threshold:0.6});
+  buildDemoGraph(null, seed, members);
+}
+
+function renderRingResults(members, err) {
+  const el = document.getElementById('ringResults');
+  const badge = document.getElementById('ringBadge');
+  if (err) {
+    el.innerHTML = `<span style="color:var(--red)">${err}</span>`;
+    badge.style.display = 'none';
+    return;
+  }
+  if (!members.length) {
+    el.innerHTML = '<span style="color:var(--green)">✓ No fraud ring detected for this account.</span>';
+    badge.style.display = 'none';
+    return;
+  }
+  badge.style.display = 'inline-block';
+  el.innerHTML = `<div style="color:var(--red);font-weight:700;margin-bottom:8px;">⚑ ${members.length} accounts in fraud ring:</div>` +
+    members.map(m => `<div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+      <span style="color:var(--blue)">${m.acct_id||m}</span>
+      <span style="color:var(--red)">${m.risk_score ? (m.risk_score*100).toFixed(0)+'% risk' : ''}</span>
+    </div>`).join('');
+}
+
+// ─── GRAPH CANVAS ─────────────────────────────────────────────────────────────
+const COLORS = {
+  account:'#3b9eff', merchant:'#a78bfa', device:'#f5a623',
+  ip:'#22d37a', fraud:'#e84040', ring:'#ff6b6b'
+};
+
+function buildDemoGraph(accounts, seed, ringMembers) {
+  accounts = accounts || [
+    {acct_id:'AC001',risk_score:0.12},{acct_id:'AC002',risk_score:0.88,is_flagged:true},
+    {acct_id:'AC003',risk_score:0.71,is_flagged:true},{acct_id:'AC004',risk_score:0.15},
+    {acct_id:'AC005',risk_score:0.94,is_flagged:true},{acct_id:'AC006',risk_score:0.09},
+    {acct_id:'AC007',risk_score:0.97,is_flagged:true},{acct_id:'AC008',risk_score:0.96,is_flagged:true},
+    {acct_id:'AC009',risk_score:0.95,is_flagged:true},{acct_id:'AC010',risk_score:0.06},
+  ];
+  const extra = [
+    {id:'MR001',type:'merchant'},{id:'MR002',type:'merchant'},{id:'MR003',type:'merchant'},
+    {id:'DV001',type:'device'},{id:'DV002',type:'device'},
+    {id:'IP-RU',type:'ip'},{id:'IP-CN',type:'ip'},
+  ];
+  graphNodes = accounts.map(a => ({
+    id: a.acct_id, type: a.is_flagged ? 'fraud' : 'account',
+    label: a.acct_id, risk: a.risk_score || 0,
+    x: 80 + Math.random()*(canvasW-160||600),
+    y: 60 + Math.random()*(canvasH-120||320),
+    vx:(Math.random()-.5)*.5, vy:(Math.random()-.5)*.5,
+    r: a.is_flagged ? 10 : 7,
+    inRing: ringMembers ? ringMembers.includes(a.acct_id) : false,
+    pulsePhase: Math.random()*Math.PI*2
+  }));
+  extra.forEach(e => graphNodes.push({
+    id:e.id,type:e.type,label:e.id,risk:0,
+    x:80+Math.random()*(canvasW-160||600),y:60+Math.random()*(canvasH-120||320),
+    vx:(Math.random()-.5)*.5,vy:(Math.random()-.5)*.5,r:5,inRing:false,pulsePhase:Math.random()*Math.PI*2
+  }));
+
+  graphLinks = [
+    {s:'AC002',t:'AC003',suspicious:true},{s:'AC003',t:'AC005',suspicious:true},
+    {s:'AC005',t:'AC007',suspicious:true},{s:'AC007',t:'AC008',suspicious:true},
+    {s:'AC008',t:'AC009',suspicious:true},{s:'AC002',t:'DV002',suspicious:false},
+    {s:'AC007',t:'DV002',suspicious:true},{s:'AC008',t:'DV002',suspicious:true},
+    {s:'AC001',t:'MR001',suspicious:false},{s:'AC002',t:'MR002',suspicious:false},
+    {s:'AC007',t:'IP-CN',suspicious:false},{s:'AC002',t:'IP-RU',suspicious:false},
+    {s:'AC005',t:'MR003',suspicious:true},{s:'AC004',t:'MR001',suspicious:false},
+    {s:'AC009',t:'IP-CN',suspicious:true},{s:'AC003',t:'MR003',suspicious:true},
+  ];
+}
+
+function buildLiveGraph(results, seed) {
+  // Build graph from TigerGraph network query results
+  const nodeMap = {};
+  graphNodes = []; graphLinks = [];
+  if (results && results[0]) {
+    const r = results[0];
+    (r['@@nodes'] || []).forEach(n => {
+      if (!nodeMap[n.v_id]) {
+        nodeMap[n.v_id] = true;
+        const isFraud = (n.attributes?.is_flagged || n.attributes?.risk_score > 0.7);
+        graphNodes.push({
+          id: n.v_id, type: isFraud ? 'fraud' : (n.v_type||'account').toLowerCase(),
+          label: n.v_id, risk: n.attributes?.risk_score || 0,
+          x: 80+Math.random()*(canvasW-160),y:60+Math.random()*(canvasH-120),
+          vx:(Math.random()-.5)*.4,vy:(Math.random()-.5)*.4,
+          r: isFraud?10:7, inRing: false, pulsePhase: Math.random()*Math.PI*2
+        });
+      }
+    });
+    (r['@@edges'] || []).forEach(e => {
+      graphLinks.push({s:e.from_id,t:e.to_id,suspicious:e.attributes?.is_suspicious||false});
+    });
+  }
+  if (!graphNodes.length) buildDemoGraph();
+}
+
+function initCanvas() {
+  const canvas = document.getElementById('graphCanvas');
+  canvasW = canvas.parentElement.clientWidth;
+  canvasH = canvas.parentElement.clientHeight || 420;
+  canvas.width = canvasW; canvas.height = canvasH;
+  if (animFrame) cancelAnimationFrame(animFrame);
+  if (!graphNodes.length) buildDemoGraph();
+  drawLoop();
+
+  canvas.addEventListener('mousemove', onCanvasHover);
+  window.addEventListener('resize', () => {
+    canvasW = canvas.parentElement.clientWidth;
+    canvasH = canvas.parentElement.clientHeight || 420;
+    canvas.width = canvasW; canvas.height = canvasH;
+  });
+}
+
+function onCanvasHover(e) {
+  const canvas = document.getElementById('graphCanvas');
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left)*(canvas.width/rect.width);
+  const my = (e.clientY - rect.top)*(canvas.height/rect.height);
+  const popup = document.getElementById('nodePopup');
+  let hit = null;
+  graphNodes.forEach(n => { if(Math.hypot(n.x-mx,n.y-my) < n.r+6) hit = n; });
+  if (hit) {
+    popup.style.display = 'block';
+    popup.style.left = (e.clientX - rect.left + 12) + 'px';
+    popup.style.top  = (e.clientY - rect.top  - 10) + 'px';
+    popup.innerHTML = `<div class="np-title">${hit.id}</div>
+      <div class="np-row"><span class="np-key">Type</span><span class="np-val" style="color:${COLORS[hit.type]||'#fff'}">${hit.type}</span></div>
+      <div class="np-row"><span class="np-key">Risk Score</span><span class="np-val" style="color:${hit.risk>0.7?'var(--red)':hit.risk>0.5?'var(--amber)':'var(--green)'}">${(hit.risk*100).toFixed(0)}%</span></div>
+      ${hit.inRing ? '<div style="color:var(--red);margin-top:6px;font-weight:700;">⚑ IN FRAUD RING</div>' : ''}`;
+  } else {
+    popup.style.display = 'none';
+  }
+}
+
+function drawLoop() {
+  const canvas = document.getElementById('graphCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvasW,canvasH);
+
+  // grid
+  ctx.strokeStyle = 'rgba(245,166,35,0.04)'; ctx.lineWidth = 0.5;
+  for(let x=0;x<canvasW;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvasH);ctx.stroke();}
+  for(let y=0;y<canvasH;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvasW,y);ctx.stroke();}
+
+  // find node positions by id
+  const pos = {};
+  graphNodes.forEach(n => pos[n.id] = n);
+
+  // links
+  graphLinks.forEach(l => {
+    const s = pos[l.s], t = pos[l.t];
+    if(!s||!t) return;
+    ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(t.x,t.y);
+    if(l.suspicious) {
+      ctx.strokeStyle=`rgba(232,64,64,${0.12+0.12*Math.sin(tick*0.05+l.s.length)})`;
+      ctx.lineWidth=1; ctx.setLineDash([4,4]);
+    } else {
+      ctx.strokeStyle='rgba(59,158,255,0.07)'; ctx.lineWidth=0.5; ctx.setLineDash([]);
+    }
+    ctx.stroke();
+  });
+  ctx.setLineDash([]);
+
+  // nodes
+  graphNodes.forEach(n => {
+    const p = Math.sin(tick*0.05+n.pulsePhase);
+    const col = n.inRing ? '#ff6b6b' : (COLORS[n.type]||'#aaa');
+    if(n.type==='fraud'||n.inRing) {
+      ctx.beginPath();ctx.arc(n.x,n.y,n.r+6+3*p,0,Math.PI*2);
+      ctx.fillStyle=`rgba(232,64,64,${0.07+0.05*p})`;ctx.fill();
+    }
+    ctx.beginPath();ctx.arc(n.x,n.y,n.r,0,Math.PI*2);
+    ctx.fillStyle=col; ctx.fill();
+    if(n.type==='fraud'||n.inRing){ctx.strokeStyle='#e84040';ctx.lineWidth=1.5;ctx.stroke();}
+
+    // seed highlight
+    const seed = document.getElementById('seedSelect').value;
+    if(n.id===seed){
+      ctx.beginPath();ctx.arc(n.x,n.y,n.r+9+4*p,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(245,166,35,${0.4+0.3*p})`;ctx.lineWidth=1.5;ctx.stroke();
+    }
+
+    if(n.type==='fraud'&&n.r>7){
+      ctx.fillStyle='#fff';ctx.font='bold 7px Space Mono,monospace';
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('!',n.x,n.y);
+    }
+  });
+
+  // legend
+  const items=[['Account','#3b9eff'],['Merchant','#a78bfa'],['Device','#f5a623'],['IP','#22d37a'],['Fraud','#e84040']];
+  let lx=12; ctx.font='9px Space Mono,monospace'; ctx.textBaseline='middle';
+  items.forEach(([l,c])=>{
+    ctx.beginPath();ctx.arc(lx+4,canvasH-12,4,0,Math.PI*2);ctx.fillStyle=c;ctx.fill();
+    ctx.fillStyle='rgba(200,210,220,0.55)';ctx.textAlign='left';
+    ctx.fillText(l,lx+12,canvasH-12); lx+=l.length*5.8+20;
+  });
+
+  // physics
+  graphNodes.forEach(n=>{
+    n.x+=n.vx; n.y+=n.vy;
+    if(n.x<20||n.x>canvasW-20) n.vx*=-1;
+    if(n.y<20||n.y>canvasH-20) n.vy*=-1;
+    n.vx+=(Math.random()-.5)*0.04; n.vy+=(Math.random()-.5)*0.04;
+    n.vx=Math.max(-1.2,Math.min(1.2,n.vx)); n.vy=Math.max(-1.2,Math.min(1.2,n.vy));
+  });
+  tick++;
+  animFrame = requestAnimationFrame(drawLoop);
+}
+
+// ─── LIVE FEED SIMULATION (for demo) ────────────────────────────────────────
+function startLiveFeed() {
+  if (!isDemo) return;
+  const merchants=['AMAZON','STRIPE Pay','COINBASE','UBER','FX BROKER','DARK STORE','CRYPTOEX'];
+  const regions=['US-CA','RU-MOW','NG-LAG','CN-BJ','BR-SAO','DE-BER','GB-LND'];
+  function addRow(){
+    const score=Math.random(), risk=score>.75?'high':score>.45?'med':'low';
+    const amt=risk==='high'?(Math.random()*8000+500).toFixed(2):(Math.random()*500+10).toFixed(2);
+    const col={high:'var(--red)',med:'var(--amber)',low:'var(--green)'};
+    const rcls={high:'r-high',med:'r-med',low:'r-low'};
+    const row=document.createElement('div');row.className='tx-row new';
+    row.innerHTML=`<div class="risk-dot ${rcls[risk]}"></div>
+      <div class="tx-id">TX${Math.random().toString(36).substring(2,8).toUpperCase()}</div>
+      <div class="tx-info">${merchants[Math.floor(Math.random()*merchants.length)]} · ${regions[Math.floor(Math.random()*regions.length)]}</div>
+      <div class="tx-amt">$${amt}</div>
+      <div class="tx-score" style="color:${col[risk]}">${(score*100).toFixed(0)}</div>`;
+    // reuse feed for live txs in demo — but the feed shows accounts now. Use alert area.
+  }
+  setInterval(addRow, 2000);
+}
+
+// ─── GSQL DISPLAY ────────────────────────────────────────────────────────────
+const GSQL_TEMPLATES = {
+  getHighRiskAccounts: (p)=>`<span class="cm">// TigerGraph Savanna GSQL — Executed ${new Date().toLocaleTimeString()}</span>
+<span class="kw">RUN QUERY</span> <span class="fn">getHighRiskAccounts</span>(
+  minRisk = <span class="num">${p.minRisk}</span>,
+  topK    = <span class="num">${p.topK}</span>
+)
+
+<span class="cm">// Equivalent GSQL body:</span>
+<span class="kw">SELECT</span> a <span class="kw">FROM</span> Account:a
+  <span class="kw">WHERE</span> a.risk_score >= <span class="num">${p.minRisk}</span>
+  <span class="kw">ORDER BY</span> a.risk_score <span class="kw">DESC</span>
+  <span class="kw">LIMIT</span> <span class="num">${p.topK}</span>;`,
+
+  detectFraudRing: (p)=>`<span class="cm">// TigerGraph Savanna GSQL — Ring Detection ${new Date().toLocaleTimeString()}</span>
+<span class="kw">RUN QUERY</span> <span class="fn">detectFraudRing</span>(
+  seed      = <span class="str">"${p.seed}"</span>,
+  depth     = <span class="num">${p.depth}</span>,
+  threshold = <span class="num">${p.threshold}</span>
+)
+
+<span class="kw">WHILE</span> seed_set.size() > <span class="num">0</span> <span class="kw">LIMIT</span> <span class="num">${p.depth}</span> <span class="kw">DO</span>
+  seed_set = <span class="kw">SELECT</span> t <span class="kw">FROM</span> seed_set:s
+    -(TRANSFER>|SHARED_DEVICE>|SHARED_IP>)- Account:t
+    <span class="kw">WHERE</span> t.@visited == <span class="num">false</span>
+    <span class="kw">ACCUM</span> t.@riskScore += s.@riskScore * <span class="num">0.80</span>
+    <span class="kw">POST-ACCUM IF</span> t.@riskScore > <span class="num">${p.threshold}</span>
+      <span class="kw">THEN</span> @@ring += t <span class="kw">END</span>;
+<span class="kw">END</span>;`,
+};
+
+function updateGsql(query, params) {
+  const tmpl = GSQL_TEMPLATES[query];
+  if (tmpl) document.getElementById('gsqlCode').innerHTML = tmpl(params);
+}
+function toggleGsql() {
+  const b=document.getElementById('gsqlBody'),t=document.getElementById('gsqlToggle');
+  if(b.style.display==='none'){b.style.display='block';t.textContent='▲ collapse';}
+  else{b.style.display='none';t.textContent='▼ expand';}
+}
+</script>
+</body>
+</html>
